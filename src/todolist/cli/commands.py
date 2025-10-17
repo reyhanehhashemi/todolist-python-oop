@@ -20,7 +20,7 @@ class CLI:
     """Command-line interface for ToDo List application."""
 
     def __init__(
-        self, project_service: ProjectService, task_service: TaskService
+            self, project_service: ProjectService, task_service: TaskService
     ) -> None:
         """
         Initialize CLI.
@@ -102,6 +102,23 @@ class CLI:
             except Exception as e:
                 print(f"\n❌ Unexpected error: {e}")
 
+    def _get_integer_input(self, prompt: str) -> Optional[int]:
+        """
+        Get integer input from user.
+
+        Args:
+            prompt: Prompt message
+
+        Returns:
+            Integer value or None if invalid
+        """
+        try:
+            value = input(prompt).strip()
+            return int(value)
+        except ValueError:
+            print("❌ Invalid input. Please enter a valid number.")
+            return None
+
     def _create_project(self) -> None:
         """Handle project creation."""
         print("\n--- Create New Project ---")
@@ -134,7 +151,10 @@ class CLI:
     def _view_project_details(self) -> None:
         """Handle viewing project details with tasks."""
         print("\n--- View Project Details ---")
-        project_id = input("Enter Project ID: ").strip()
+        project_id = self._get_integer_input("Enter Project ID: ")
+
+        if project_id is None:
+            return
 
         try:
             summary = self._project_service.get_project_summary(project_id)
@@ -163,7 +183,10 @@ class CLI:
     def _update_project(self) -> None:
         """Handle project update."""
         print("\n--- Update Project ---")
-        project_id = input("Enter Project ID: ").strip()
+        project_id = self._get_integer_input("Enter Project ID: ")
+
+        if project_id is None:
+            return
 
         try:
             project = self._project_service.get_project(project_id)
@@ -189,7 +212,10 @@ class CLI:
     def _delete_project(self) -> None:
         """Handle project deletion."""
         print("\n--- Delete Project ---")
-        project_id = input("Enter Project ID: ").strip()
+        project_id = self._get_integer_input("Enter Project ID: ")
+
+        if project_id is None:
+            return
 
         try:
             project = self._project_service.get_project(project_id)
@@ -221,7 +247,11 @@ class CLI:
         for idx, project in enumerate(projects, 1):
             print(f"  {idx}. {project.title} (ID: {project.id})")
 
-        project_id = input("\nEnter Project ID: ").strip()
+        project_id = self._get_integer_input("\nEnter Project ID: ")
+
+        if project_id is None:
+            return
+
         title = input("Task Title: ").strip()
         description = input("Description (optional): ").strip()
 
@@ -253,7 +283,10 @@ class CLI:
     def _list_tasks_by_project(self) -> None:
         """Handle listing tasks for a specific project."""
         print("\n--- Tasks by Project ---")
-        project_id = input("Enter Project ID: ").strip()
+        project_id = self._get_integer_input("Enter Project ID: ")
+
+        if project_id is None:
+            return
 
         try:
             project = self._project_service.get_project(project_id)
@@ -277,7 +310,10 @@ class CLI:
     def _update_task(self) -> None:
         """Handle task update."""
         print("\n--- Update Task ---")
-        task_id = input("Enter Task ID: ").strip()
+        task_id = self._get_integer_input("Enter Task ID: ")
+
+        if task_id is None:
+            return
 
         try:
             task = self._task_service.get_task(task_id)
@@ -303,7 +339,10 @@ class CLI:
     def _update_task_status(self) -> None:
         """Handle task status update."""
         print("\n--- Update Task Status ---")
-        task_id = input("Enter Task ID: ").strip()
+        task_id = self._get_integer_input("Enter Task ID: ")
+
+        if task_id is None:
+            return
 
         try:
             task = self._task_service.get_task(task_id)
@@ -323,7 +362,10 @@ class CLI:
     def _delete_task(self) -> None:
         """Handle task deletion."""
         print("\n--- Delete Task ---")
-        task_id = input("Enter Task ID: ").strip()
+        task_id = self._get_integer_input("Enter Task ID: ")
+
+        if task_id is None:
+            return
 
         try:
             task = self._task_service.get_task(task_id)

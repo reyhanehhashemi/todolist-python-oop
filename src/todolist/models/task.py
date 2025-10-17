@@ -9,9 +9,9 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from typing import Optional
-from uuid import uuid4
 
 from ..utils.validators import validate_non_empty_string, validate_status
+from ..utils.id_generator import id_generator
 
 
 class TaskStatus(str, Enum):
@@ -33,7 +33,7 @@ class Task:
     Task entity representing a single task within a project.
 
     Attributes:
-        id: Unique identifier (UUID)
+        id: Unique identifier (integer)
         title: Task title
         description: Detailed description of the task
         status: Current status (TODO, IN_PROGRESS, DONE)
@@ -43,10 +43,10 @@ class Task:
     """
 
     title: str
-    project_id: str
+    project_id: int
     description: str = ""
     status: str = TaskStatus.TODO.value
-    id: str = field(default_factory=lambda: str(uuid4()))
+    id: int = field(default_factory=lambda: id_generator.generate('task'))
     created_at: datetime = field(default_factory=datetime.now)
     updated_at: datetime = field(default_factory=datetime.now)
 
@@ -62,7 +62,12 @@ class Task:
             ValidationError: If validation fails
         """
         validate_non_empty_string(self.title, "Task title", max_length=30)
-        validate_non_empty_string(self.project_id, "Project ID")
+
+        # Validate project_id is an integer
+        if not isinstance(self.project_id, int):
+            from ..utils.exceptions import ValidationError
+            raise ValidationError("Project ID must be an integer")
+
         validate_status(self.status, TaskStatus.values(), "Task status")
 
         # Description can be empty, but if provided, must be string
@@ -86,7 +91,7 @@ class Task:
         self.updated_at = datetime.now()
 
     def update_details(
-        self, title: Optional[str] = None, description: Optional[str] = None
+            self, title: Optional[str] = None, description: Optional[str] = None
     ) -> None:
         """
         Update task details.
@@ -114,16 +119,16 @@ class Task:
     def __str__(self) -> str:
         """Return string representation of task."""
         return (
-            f"Task(id={self.id[:8]}..., title='{self.title}', "
+            f"Task(id={self.id}, title='{self.title}', "
             f"status={self.status})"
         )
 
     def __repr__(self) -> str:
         """Return detailed string representation of task."""
         return (
-            f"Task(id='{self.id}', title='{self.title}', "
+            f"Task(id={self.id}, title='{self.title}', "
             f"description='{self.description[:30]}...', "
-            f"status='{self.status}', project_id='{self.project_id}', "
+            f"status='{self.status}', project_id={self.project_id}, "
             f"created_at={self.created_at.isoformat()}, "
             f"updated_at={self.updated_at.isoformat()})"
         )

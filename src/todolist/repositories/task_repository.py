@@ -21,7 +21,7 @@ class TaskRepository:
 
     def __init__(self) -> None:
         """Initialize empty task storage."""
-        self._tasks: dict[str, Task] = {}
+        self._tasks: dict[int, Task] = {}
 
     def add(self, task: Task) -> Task:
         """
@@ -42,7 +42,7 @@ class TaskRepository:
         self._tasks[task.id] = task
         return task
 
-    def get_by_id(self, task_id: str) -> Task:
+    def get_by_id(self, task_id: int) -> Task:
         """
         Retrieve a task by its ID.
 
@@ -57,7 +57,7 @@ class TaskRepository:
         """
         task = self._tasks.get(task_id)
         if task is None:
-            raise ResourceNotFoundError("Task", task_id)
+            raise ResourceNotFoundError("Task", str(task_id))
         return task
 
     def get_all(self) -> list[Task]:
@@ -69,7 +69,7 @@ class TaskRepository:
         """
         return list(self._tasks.values())
 
-    def get_by_project_id(self, project_id: str) -> list[Task]:
+    def get_by_project_id(self, project_id: int) -> list[Task]:
         """
         Retrieve all tasks belonging to a specific project.
 
@@ -97,12 +97,12 @@ class TaskRepository:
             ResourceNotFoundError: If task is not found
         """
         if task.id not in self._tasks:
-            raise ResourceNotFoundError("Task", task.id)
+            raise ResourceNotFoundError("Task", str(task.id))
 
         self._tasks[task.id] = task
         return task
 
-    def delete(self, task_id: str) -> None:
+    def delete(self, task_id: int) -> None:
         """
         Delete a task by its ID.
 
@@ -113,11 +113,11 @@ class TaskRepository:
             ResourceNotFoundError: If task is not found
         """
         if task_id not in self._tasks:
-            raise ResourceNotFoundError("Task", task_id)
+            raise ResourceNotFoundError("Task", str(task_id))
 
         del self._tasks[task_id]
 
-    def delete_by_project_id(self, project_id: str) -> int:
+    def delete_by_project_id(self, project_id: int) -> int:
         """
         Delete all tasks belonging to a specific project (cascade delete).
 
@@ -147,7 +147,7 @@ class TaskRepository:
         """
         return len(self._tasks)
 
-    def count_by_project_id(self, project_id: str) -> int:
+    def count_by_project_id(self, project_id: int) -> int:
         """
         Get count of tasks in a specific project.
 
@@ -159,7 +159,7 @@ class TaskRepository:
         """
         return sum(1 for task in self._tasks.values() if task.project_id == project_id)
 
-    def exists(self, task_id: str) -> bool:
+    def exists(self, task_id: int) -> bool:
         """
         Check if a task exists.
 
