@@ -1,0 +1,21 @@
+[tool.poetry]
+name = "todolist"
+version = "0.1.0"
+description = "CLI-based ToDo List application - Phase 1 (In-Memory)"
+authors = ["Your Name <your.email@example.com>"]
+readme = "README.md"
+packages = [{include = "todolist", from = "src"}]
+
+[tool.poetry.dependencies]
+python = "^3.9"
+python-dotenv = "^1.0.0"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^7.4.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry.scripts]
+todolist = "todolist.main:main"
