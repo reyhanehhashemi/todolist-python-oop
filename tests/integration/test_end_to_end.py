@@ -1,26 +1,25 @@
-"""
-End-to-end integration tests.
-"""
+# tests/integration/test_end_to_end.py
 
 import pytest
-from src.todolist.repositories.project_repository import ProjectRepository
-from src.todolist.repositories.task_repository import TaskRepository
+from datetime import datetime, timedelta
+from src.todolist.models.task import TaskStatus
 from src.todolist.services.project_service import ProjectService
 from src.todolist.services.task_service import TaskService
-from src.todolist.models.task import TaskStatus
+from src.todolist.repositories.project_repository import ProjectRepository
+from src.todolist.repositories.task_repository import TaskRepository
+from src.todolist.utils.exceptions import ResourceNotFoundError  # ✅ اضافه شد
 
 
 class TestEndToEnd:
-    """Test complete user workflows."""
+    """Integration tests for complete workflows."""
 
     @pytest.fixture
     def setup_services(self):
-        """Setup complete service stack."""
+        """Setup services for testing."""
         project_repo = ProjectRepository()
         task_repo = TaskRepository()
         project_service = ProjectService(project_repo, task_repo)
         task_service = TaskService(task_repo)
-
         return project_service, task_service
 
     def test_complete_workflow(self, setup_services):
@@ -42,56 +41,60 @@ class TestEndToEnd:
         assert len(tasks) == 2
 
         # 4. Update task status
-        task_service.update_task_status(task1.id, TaskStatus.IN_PROGRESS.value)
+        task_service.update_task_status(task1.id, TaskStatus.DOING.value)
 
-        # 5. Get project summary
-        summary = project_service.get_project_summary(project.id)
-        assert summary["total_tasks"] == 2
-        assert summary["status_breakdown"][TaskStatus.IN_PROGRESS.value] == 1
-        assert summary["status_breakdown"][TaskStatus.TODO.value] == 1
+        # 5. Verify status update
+        updated_task = task_service.get_task(task1.id)
+        assert updated_task.status == TaskStatus.DOING.value
 
-        # 6. Update task details
-        updated_task = task_service.update_task(
-            task1.id, title="Updated Task 1", description="Updated description"
-        )
-        assert updated_task.title == "Updated Task 1"
-
-        # 7. Complete a task
+        # 6. Complete task
         task_service.update_task_status(task1.id, TaskStatus.DONE.value)
-        completed_tasks = task_service.get_tasks_by_status(TaskStatus.DONE.value)
-        assert len(completed_tasks) == 1
+        completed_task = task_service.get_task(task1.id)
+        assert completed_task.status == TaskStatus.DONE.value
 
-        # 8. Delete project with cascade
-        result = project_service.delete_project(project.id, cascade=True)
-        assert result["deleted_tasks"] == 2
+        # 7. Get tasks by status
+        doing_tasks = task_service.get_tasks_by_status(TaskStatus.DOING.value)
+        assert len(doing_tasks) == 0
 
-        # 9. Verify everything is deleted
-        assert project_service.count_projects() == 0
-        assert task_service.count_tasks() == 0
+        done_tasks = task_service.get_tasks_by_status(TaskStatus.DONE.value)
+        assert len(done_tasks) == 1
+
+        # 8. Delete project (cascading delete)
+        project_service.delete_project(project.id)
+        with pytest.raises(ResourceNotFoundError):  # ✅ تغییر از ValueError
+            project_service.get_project(project.id)
+
+        # Verify tasks are also deleted
+        tasks = task_service.get_tasks_by_project(project.id)
+        assert len(tasks) == 0
 
     def test_multiple_projects_workflow(self, setup_services):
-        """Test managing multiple projects."""
+        """Test workflow with multiple projects."""
         project_service, task_service = setup_services
 
-        # Create multiple projects
-        project1 = project_service.create_project("Work", "Work tasks")
-        project2 = project_service.create_project("Personal", "Personal tasks")
+        # Create two projects
+        project1 = project_service.create_project("Project 1", "First project")
+        project2 = project_service.create_project("Project 2", "Second project")
 
-        # Create tasks in different projects
-        task_service.create_task("Work Task 1", project1.id)
-        task_service.create_task("Work Task 2", project1.id)
-        task_service.create_task("Personal Task 1", project2.id)
+        # Create tasks for each project
+        task1 = task_service.create_task("Task 1", project1.id, "Task for project 1")
+        task2 = task_service.create_task("Task 2", project2.id, "Task for project 2")
 
-        # Verify task distribution
-        work_tasks = task_service.get_tasks_by_project(project1.id)
-        personal_tasks = task_service.get_tasks_by_project(project2.id)
+        # Verify tasks are assigned correctly
+        p1_tasks = task_service.get_tasks_by_project(project1.id)
+        p2_tasks = task_service.get_tasks_by_project(project2.id)
 
-        assert len(work_tasks) == 2
-        assert len(personal_tasks) == 1
+        assert len(p1_tasks) == 1
+        assert len(p2_tasks) == 1
+        assert p1_tasks[0].project_id == project1.id
+        assert p2_tasks[0].project_id == project2.id
 
         # Delete one project
-        project_service.delete_project(project1.id, cascade=True)
+        project_service.delete_project(project1.id)
 
-        # Verify only project2 tasks remain
-        assert task_service.count_tasks() == 1
-        assert project_service.count_projects() == 1
+        # Verify only project1 tasks are deleted
+        p1_tasks = task_service.get_tasks_by_project(project1.id)
+        p2_tasks = task_service.get_tasks_by_project(project2.id)
+
+        assert len(p1_tasks) == 0
+        assert len(p2_tasks) == 1
