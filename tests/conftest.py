@@ -9,6 +9,15 @@ from src.todolist.services.project_service import ProjectService
 from src.todolist.services.task_service import TaskService
 from src.todolist.models.project import Project
 from src.todolist.models.task import Task
+from src.todolist.utils.id_generator import id_generator
+
+
+@pytest.fixture(autouse=True)
+def reset_id_generator():
+    """Reset ID generator before each test."""
+    id_generator.reset()
+    yield
+    id_generator.reset()
 
 
 @pytest.fixture

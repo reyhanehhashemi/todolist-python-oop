@@ -21,7 +21,7 @@ class ProjectRepository:
 
     def __init__(self) -> None:
         """Initialize empty project storage."""
-        self._projects: dict[str, Project] = {}
+        self._projects: dict[int, Project] = {}
 
     def add(self, project: Project) -> Project:
         """
@@ -42,7 +42,7 @@ class ProjectRepository:
         self._projects[project.id] = project
         return project
 
-    def get_by_id(self, project_id: str) -> Project:
+    def get_by_id(self, project_id: int) -> Project:
         """
         Retrieve a project by its ID.
 
@@ -57,7 +57,7 @@ class ProjectRepository:
         """
         project = self._projects.get(project_id)
         if project is None:
-            raise ResourceNotFoundError("Project", project_id)
+            raise ResourceNotFoundError("Project", str(project_id))
         return project
 
     def get_by_title(self, title: str) -> Optional[Project]:
@@ -98,12 +98,12 @@ class ProjectRepository:
             ResourceNotFoundError: If project is not found
         """
         if project.id not in self._projects:
-            raise ResourceNotFoundError("Project", project.id)
+            raise ResourceNotFoundError("Project", str(project.id))
 
         self._projects[project.id] = project
         return project
 
-    def delete(self, project_id: str) -> None:
+    def delete(self, project_id: int) -> None:
         """
         Delete a project by its ID.
 
@@ -114,7 +114,7 @@ class ProjectRepository:
             ResourceNotFoundError: If project is not found
         """
         if project_id not in self._projects:
-            raise ResourceNotFoundError("Project", project_id)
+            raise ResourceNotFoundError("Project", str(project_id))
 
         del self._projects[project_id]
 
@@ -127,7 +127,7 @@ class ProjectRepository:
         """
         return len(self._projects)
 
-    def exists(self, project_id: str) -> bool:
+    def exists(self, project_id: int) -> bool:
         """
         Check if a project exists.
 

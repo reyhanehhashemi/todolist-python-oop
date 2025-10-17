@@ -1,3 +1,4 @@
+cat > .gitignore << 'EOF'
 # Python
 __pycache__/
 *.py[cod]
@@ -26,7 +27,7 @@ ENV/
 env/
 .venv
 
-
+# Poetry
 
 # IDE
 .idea/
@@ -44,3 +45,4 @@ Thumbs.db
 .coverage
 htmlcov/
 .pytest_cache/
+EOF

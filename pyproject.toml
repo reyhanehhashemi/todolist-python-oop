@@ -9,6 +9,8 @@ packages = [{include = "todolist", from = "src"}]
 [tool.poetry.dependencies]
 python = "^3.9"
 python-dotenv = "^1.0.0"
+prompt-toolkit = "^3.0.52"
+rich = "^14.2.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^7.4.0"

@@ -6,6 +6,7 @@ coordinating between repositories and enforcing business rules.
 """
 
 from typing import Optional
+from datetime import datetime
 from ..models.task import Task, TaskStatus
 from ..repositories.task_repository import TaskRepository
 from ..utils.exceptions import ResourceNotFoundError, ValidationError
@@ -31,9 +32,10 @@ class TaskService:
     def create_task(
         self,
         title: str,
-        project_id: str,
+        project_id: int,
         description: str = "",
         status: str = TaskStatus.TODO.value,
+        deadline: Optional[datetime] = None,
     ) -> Task:
         """
         Create a new task.
@@ -43,6 +45,7 @@ class TaskService:
             project_id: ID of parent project
             description: Task description (optional)
             status: Initial status (default: TODO)
+            deadline: Task deadline (optional)
 
         Returns:
             Created task
@@ -56,11 +59,12 @@ class TaskService:
             project_id=project_id,
             description=description,
             status=status,
+            deadline=deadline,
         )
 
         return self._task_repo.add(task)
 
-    def get_task(self, task_id: str) -> Task:
+    def get_task(self, task_id: int) -> Task:
         """
         Retrieve a task by ID.
 
@@ -84,7 +88,7 @@ class TaskService:
         """
         return self._task_repo.get_all()
 
-    def get_tasks_by_project(self, project_id: str) -> list[Task]:
+    def get_tasks_by_project(self, project_id: int) -> list[Task]:
         """
         Retrieve all tasks for a specific project.
 
@@ -98,9 +102,10 @@ class TaskService:
 
     def update_task(
         self,
-        task_id: str,
+        task_id: int,
         title: Optional[str] = None,
         description: Optional[str] = None,
+        deadline: Optional[datetime] = None,
     ) -> Task:
         """
         Update task details.
@@ -109,6 +114,7 @@ class TaskService:
             task_id: Task identifier
             title: New title (optional)
             description: New description (optional)
+            deadline: New deadline (optional)
 
         Returns:
             Updated task
@@ -118,10 +124,10 @@ class TaskService:
             ValidationError: If validation fails
         """
         task = self._task_repo.get_by_id(task_id)
-        task.update_details(title=title, description=description)
+        task.update_details(title=title, description=description, deadline=deadline)
         return self._task_repo.update(task)
 
-    def update_task_status(self, task_id: str, new_status: str) -> Task:
+    def update_task_status(self, task_id: int, new_status: str) -> Task:
         """
         Update task status.
 
@@ -140,7 +146,7 @@ class TaskService:
         task.update_status(new_status)
         return self._task_repo.update(task)
 
-    def delete_task(self, task_id: str) -> None:
+    def delete_task(self, task_id: int) -> None:
         """
         Delete a task.
 
@@ -152,7 +158,7 @@ class TaskService:
         """
         self._task_repo.delete(task_id)
 
-    def delete_tasks_by_project(self, project_id: str) -> int:
+    def delete_tasks_by_project(self, project_id: int) -> int:
         """
         Delete all tasks belonging to a project (cascade delete).
 
@@ -173,7 +179,7 @@ class TaskService:
         """
         return self._task_repo.count()
 
-    def count_tasks_by_project(self, project_id: str) -> int:
+    def count_tasks_by_project(self, project_id: int) -> int:
         """
         Get task count for a specific project.
 
