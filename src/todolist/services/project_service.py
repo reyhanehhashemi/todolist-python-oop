@@ -62,7 +62,7 @@ class ProjectService:
         project = Project(title=title, description=description)
         return self._project_repo.add(project)
 
-    def get_project(self, project_id: str) -> Project:
+    def get_project(self, project_id: int) -> Project:
         """
         Retrieve a project by ID.
 
@@ -100,7 +100,7 @@ class ProjectService:
 
     def update_project(
         self,
-        project_id: str,
+        project_id: int,
         title: Optional[str] = None,
         description: Optional[str] = None,
     ) -> Project:
@@ -131,7 +131,7 @@ class ProjectService:
         project.update_details(title=title, description=description)
         return self._project_repo.update(project)
 
-    def delete_project(self, project_id: str, cascade: bool = True) -> dict:
+    def delete_project(self, project_id: int, cascade: bool = True) -> dict:
         """
         Delete a project.
 
@@ -171,7 +171,7 @@ class ProjectService:
         """
         return self._project_repo.count()
 
-    def get_project_summary(self, project_id: str) -> dict:
+    def get_project_summary(self, project_id: int) -> dict:
         """
         Get summary information about a project.
 

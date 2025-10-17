@@ -8,9 +8,9 @@ of related tasks.
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Optional
-from uuid import uuid4
 
 from ..utils.validators import validate_non_empty_string
+from ..utils.id_generator import id_generator
 
 
 @dataclass
@@ -19,7 +19,7 @@ class Project:
     Project entity representing a collection of related tasks.
 
     Attributes:
-        id: Unique identifier (UUID)
+        id: Unique identifier (integer)
         title: Project title
         description: Detailed description of the project
         created_at: Timestamp of creation
@@ -28,7 +28,7 @@ class Project:
 
     title: str
     description: str = ""
-    id: str = field(default_factory=lambda: str(uuid4()))
+    id: int = field(default_factory=lambda: id_generator.generate('project'))
     created_at: datetime = field(default_factory=datetime.now)
     updated_at: datetime = field(default_factory=datetime.now)
 
@@ -79,12 +79,12 @@ class Project:
 
     def __str__(self) -> str:
         """Return string representation of project."""
-        return f"Project(id={self.id[:8]}..., title='{self.title}')"
+        return f"Project(id={self.id}, title='{self.title}')"
 
     def __repr__(self) -> str:
         """Return detailed string representation of project."""
         return (
-            f"Project(id='{self.id}', title='{self.title}', "
+            f"Project(id={self.id}, title='{self.title}', "
             f"description='{self.description[:30]}...', "
             f"created_at={self.created_at.isoformat()}, "
             f"updated_at={self.updated_at.isoformat()})"
