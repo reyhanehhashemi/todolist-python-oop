@@ -61,7 +61,7 @@ class Task:
         Raises:
             ValidationError: If validation fails
         """
-        validate_non_empty_string(self.title, "Task title", max_length=100)
+        validate_non_empty_string(self.title, "Task title", max_length=30)
         validate_non_empty_string(self.project_id, "Project ID")
         validate_status(self.status, TaskStatus.values(), "Task status")
 
