@@ -1,0 +1,246 @@
+"""
+Database-backed task service for business logic.
+
+This module provides high-level operations for task management
+using database repositories.
+"""
+
+from typing import Optional
+from datetime import datetime
+from sqlalchemy.orm import Session
+from ..models.task import Task, TaskStatus
+from ..repositories.db_task_repository import DBTaskRepository
+from ..repositories.db_project_repository import DBProjectRepository
+from ..utils.exceptions import (
+    ResourceNotFoundError,
+    ValidationError,
+)
+
+
+class DBTaskService:
+    """
+    Service layer for task management with database persistence.
+
+    This class provides business logic for creating, updating,
+    and managing tasks using PostgreSQL storage.
+    """
+
+    def __init__(self, session: Session) -> None:
+        """
+        Initialize task service with database session.
+
+        Args:
+            session: SQLAlchemy database session
+        """
+        self._task_repo = DBTaskRepository(session)
+        self._project_repo = DBProjectRepository(session)
+        self._session = session
+
+    def create_task(
+            self,
+            title: str,
+            project_id: int,
+            description: str = "",
+            status: str = TaskStatus.TODO.value,
+            deadline: Optional[datetime] = None,
+    ) -> Task:
+        """
+        Create a new task.
+
+        Args:
+            title: Task title (max 30 words)
+            project_id: ID of parent project
+            description: Task description (max 150 words, optional)
+            status: Initial status (default: TODO)
+            deadline: Task deadline (optional)
+
+        Returns:
+            Created task
+
+        Raises:
+            ValidationError: If validation fails
+            ResourceNotFoundError: If project not found
+            LimitExceededError: If task limit is reached
+        """
+        # Verify project exists
+        if not self._project_repo.exists(project_id):
+            raise ResourceNotFoundError("Project", str(project_id))
+
+        # Create task entity (validation happens in __post_init__)
+        task = Task(
+            title=title,
+            project_id=project_id,
+            description=description,
+            status=status,
+            deadline=deadline,
+        )
+
+        # Persist to database
+        return self._task_repo.add(task)
+
+    def get_task(self, task_id: int) -> Task:
+        """
+        Retrieve a task by ID.
+
+        Args:
+            task_id: Task identifier
+
+        Returns:
+            Task entity
+
+        Raises:
+            ResourceNotFoundError: If task not found
+        """
+        return self._task_repo.get_by_id(task_id)
+
+    def get_all_tasks(self) -> list[Task]:
+        """
+        Retrieve all tasks.
+
+        Returns:
+            List of all tasks
+        """
+        return self._task_repo.get_all()
+
+    def get_tasks_by_project(self, project_id: int) -> list[Task]:
+        """
+        Retrieve all tasks for a specific project.
+
+        Args:
+            project_id: Project identifier
+
+        Returns:
+            List of tasks in the project
+        """
+        return self._task_repo.get_by_project_id(project_id)
+
+    def update_task(
+            self,
+            task_id: int,
+            title: Optional[str] = None,
+            description: Optional[str] = None,
+            deadline: Optional[datetime] = None,
+    ) -> Task:
+        """
+        Update task details.
+
+        Args:
+            task_id: Task identifier
+            title: New title (optional, max 30 words)
+            description: New description (optional, max 150 words)
+            deadline: New deadline (optional)
+
+        Returns:
+            Updated task
+
+        Raises:
+            ResourceNotFoundError: If task not found
+            ValidationError: If validation fails
+        """
+        # Get existing task
+        task = self._task_repo.get_by_id(task_id)
+
+        # Update task (validation happens in update_details)
+        task.update_details(title=title, description=description, deadline=deadline)
+
+        # Persist changes
+        return self._task_repo.update(task)
+
+    def update_task_status(self, task_id: int, new_status: str) -> Task:
+        """
+        Update task status.
+
+        Args:
+            task_id: Task identifier
+            new_status: New status value (TODO/DOING/DONE)
+
+        Returns:
+            Updated task
+
+        Raises:
+            ResourceNotFoundError: If task not found
+            ValidationError: If status is invalid
+        """
+        # Get existing task
+        task = self._task_repo.get_by_id(task_id)
+
+        # Update status (validation happens in update_status)
+        task.update_status(new_status)
+
+        # Persist changes
+        return self._task_repo.update(task)
+
+    def delete_task(self, task_id: int) -> None:
+        """
+        Delete a task.
+
+        Args:
+            task_id: Task identifier
+
+        Raises:
+            ResourceNotFoundError: If task not found
+        """
+        self._task_repo.delete(task_id)
+
+    def delete_tasks_by_project(self, project_id: int) -> int:
+        """
+        Delete all tasks belonging to a project (cascade delete).
+
+        Args:
+            project_id: Project identifier
+
+        Returns:
+            Number of tasks deleted
+        """
+        return self._task_repo.delete_by_project_id(project_id)
+
+    def count_tasks(self) -> int:
+        """
+        Get total task count.
+
+        Returns:
+            Number of tasks
+        """
+        return self._task_repo.count()
+
+    def count_tasks_by_project(self, project_id: int) -> int:
+        """
+        Get task count for a specific project.
+
+        Args:
+            project_id: Project identifier
+
+        Returns:
+            Number of tasks in project
+        """
+        return self._task_repo.count_by_project_id(project_id)
+
+    def get_tasks_by_status(self, status: str) -> list[Task]:
+        """
+        Get all tasks with a specific status.
+
+        Args:
+            status: Status to filter by (TODO/DOING/DONE)
+
+        Returns:
+            List of tasks with the given status
+
+        Raises:
+            ValidationError: If status is invalid
+        """
+        from ..utils.validators import validate_status
+
+        # Validate status
+        validate_status(status, TaskStatus.values())
+
+        # Get all tasks and filter by status
+        all_tasks = self._task_repo.get_all()
+        return [task for task in all_tasks if task.status == status]
+
+    def commit(self) -> None:
+        """Commit the current database transaction."""
+        self._session.commit()
+
+    def rollback(self) -> None:
+        """Rollback the current database transaction."""
+        self._session.rollback()
