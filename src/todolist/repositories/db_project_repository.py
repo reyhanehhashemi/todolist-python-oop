@@ -1,76 +1,90 @@
 """
-Database repository for Project entities.
+Database-backed project repository for data persistence.
 
-This module provides database-backed storage and retrieval operations
-for Project entities using SQLAlchemy.
+This module provides PostgreSQL storage and retrieval operations
+for Project entities using SQLAlchemy ORM.
 """
 
 from typing import Optional
 from sqlalchemy.orm import Session
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy import func
 from ..models.db_project import DBProject
-from ..models.project import Project
-from ..utils.exceptions import (
-    ResourceNotFoundError,
-    LimitExceededError,
-    DuplicateResourceError,
-)
+from ..utils.exceptions import ResourceNotFoundError, LimitExceededError
 from ..config import settings
 
 
 class DBProjectRepository:
     """
-    Database repository for managing Project entities.
+    Repository for managing Project entities in PostgreSQL.
 
-    This class provides CRUD operations for projects using PostgreSQL.
+    This class provides CRUD operations for projects and enforces
+    business constraints like maximum project count.
     """
 
     def __init__(self, session: Session) -> None:
         """
-        Initialize repository with database session.
+        Initialize project repository with database session.
 
         Args:
             session: SQLAlchemy database session
         """
         self._session = session
 
-    def add(self, project: Project) -> Project:
+    def _get_next_id(self) -> int:
+        """
+        Get the next available project ID by finding the first gap.
+
+        Returns:
+            Next available ID (smallest unused positive integer)
+        """
+        # Get all existing IDs sorted
+        existing_ids = [
+            row[0] for row in self._session.query(DBProject.id).order_by(DBProject.id).all()
+        ]
+
+        # Find first gap
+        next_id = 1
+        for existing_id in existing_ids:
+            if existing_id == next_id:
+                next_id += 1
+            elif existing_id > next_id:
+                break
+
+        return next_id
+
+    def add(self, title: str, description: str = "") -> DBProject:
         """
         Add a new project to the database.
 
         Args:
-            project: Project entity to add
+            title: Project title
+            description: Project description (optional)
 
         Returns:
-            The added project with database ID
+            The created project
 
         Raises:
             LimitExceededError: If maximum project limit is reached
-            DuplicateResourceError: If project with same title exists
         """
-        # Check limit
+        # Check project limit
         if self.count() >= settings.max_number_of_project:
             raise LimitExceededError("Project", settings.max_number_of_project)
 
-        # Convert to DB model
-        db_project = DBProject(
-            title=project.title,
-            description=project.description,
+        # Get next available ID
+        next_id = self._get_next_id()
+
+        # Create new project with manual ID
+        project = DBProject(
+            id=next_id,
+            title=title,
+            description=description
         )
 
-        try:
-            self._session.add(db_project)
-            self._session.flush()  # Get ID without committing
+        self._session.add(project)
+        self._session.flush()  # Flush to get the ID assigned
+        return project
 
-            # Update domain model with DB ID
-            project.id = db_project.id
-            return project
-
-        except IntegrityError:
-            self._session.rollback()
-            raise DuplicateResourceError("Project", project.title)
-
-    def get_by_id(self, project_id: int) -> Project:
+    def get_by_id(self, project_id: int) -> DBProject:
         """
         Retrieve a project by its ID.
 
@@ -83,15 +97,14 @@ class DBProjectRepository:
         Raises:
             ResourceNotFoundError: If project is not found
         """
-        db_project = self._session.get(DBProject, project_id)
-        if db_project is None:
+        project = self._session.query(DBProject).filter(DBProject.id == project_id).first()
+        if project is None:
             raise ResourceNotFoundError("Project", str(project_id))
+        return project
 
-        return self._to_domain(db_project)
-
-    def get_by_title(self, title: str) -> Optional[Project]:
+    def get_by_title(self, title: str) -> Optional[DBProject]:
         """
-        Retrieve a project by its title.
+        Retrieve a project by its title (case-insensitive).
 
         Args:
             title: Project title
@@ -99,25 +112,22 @@ class DBProjectRepository:
         Returns:
             Project entity if found, None otherwise
         """
-        db_project = (
+        return (
             self._session.query(DBProject)
-            .filter(DBProject.title == title)
+            .filter(func.lower(DBProject.title) == title.lower())
             .first()
         )
 
-        return self._to_domain(db_project) if db_project else None
-
-    def get_all(self) -> list[Project]:
+    def get_all(self) -> list[DBProject]:
         """
         Retrieve all projects.
 
         Returns:
             List of all projects
         """
-        db_projects = self._session.query(DBProject).all()
-        return [self._to_domain(p) for p in db_projects]
+        return self._session.query(DBProject).order_by(DBProject.id).all()
 
-    def update(self, project: Project) -> Project:
+    def update(self, project: DBProject) -> DBProject:
         """
         Update an existing project.
 
@@ -129,23 +139,14 @@ class DBProjectRepository:
 
         Raises:
             ResourceNotFoundError: If project is not found
-            DuplicateResourceError: If new title conflicts
         """
-        db_project = self._session.get(DBProject, project.id)
-        if db_project is None:
+        existing = self._session.query(DBProject).filter(DBProject.id == project.id).first()
+        if existing is None:
             raise ResourceNotFoundError("Project", str(project.id))
 
-        # Update fields
-        db_project.title = project.title
-        db_project.description = project.description
-
-        try:
-            self._session.flush()
-            return project
-
-        except IntegrityError:
-            self._session.rollback()
-            raise DuplicateResourceError("Project", project.title)
+        self._session.merge(project)
+        self._session.flush()
+        return project
 
     def delete(self, project_id: int) -> None:
         """
@@ -157,11 +158,8 @@ class DBProjectRepository:
         Raises:
             ResourceNotFoundError: If project is not found
         """
-        db_project = self._session.get(DBProject, project_id)
-        if db_project is None:
-            raise ResourceNotFoundError("Project", str(project_id))
-
-        self._session.delete(db_project)
+        project = self.get_by_id(project_id)
+        self._session.delete(project)
         self._session.flush()
 
     def count(self) -> int:
@@ -183,13 +181,16 @@ class DBProjectRepository:
         Returns:
             True if project exists, False otherwise
         """
-        return self._session.query(DBProject.id).filter(
-            DBProject.id == project_id
-        ).first() is not None
+        return (
+            self._session.query(DBProject)
+            .filter(DBProject.id == project_id)
+            .count()
+            > 0
+        )
 
     def exists_by_title(self, title: str) -> bool:
         """
-        Check if a project with given title exists.
+        Check if a project with given title exists (case-insensitive).
 
         Args:
             title: Project title
@@ -197,25 +198,9 @@ class DBProjectRepository:
         Returns:
             True if project exists, False otherwise
         """
-        return self._session.query(DBProject.id).filter(
-            DBProject.title == title
-        ).first() is not None
+        return self.get_by_title(title) is not None
 
-    def _to_domain(self, db_project: DBProject) -> Project:
-        """
-        Convert database model to domain model.
-
-        Args:
-            db_project: Database project entity
-
-        Returns:
-            Domain project entity
-        """
-        project = Project(
-            title=db_project.title,
-            description=db_project.description,
-        )
-        project.id = db_project.id
-        project.created_at = db_project.created_at
-        project.updated_at = db_project.updated_at
-        return project
+    def clear(self) -> None:
+        """Remove all projects from database (for testing purposes)."""
+        self._session.query(DBProject).delete()
+        self._session.flush()

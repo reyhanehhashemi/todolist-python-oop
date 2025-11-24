@@ -1,72 +1,104 @@
 """
-Database repository for Task entities.
+Database-backed task repository for data persistence.
 
-This module provides database-backed storage and retrieval operations
-for Task entities using SQLAlchemy.
+This module provides PostgreSQL storage and retrieval operations
+for Task entities using SQLAlchemy ORM.
 """
 
 from typing import Optional
 from datetime import datetime
 from sqlalchemy.orm import Session
-from ..models.db_task import DBTask
-from ..models.task import Task, TaskStatus
-from ..utils.exceptions import (
-    ResourceNotFoundError,
-    LimitExceededError,
-)
+from sqlalchemy import func
+from ..models.db_task import DBTask, TaskStatus
+from ..utils.exceptions import ResourceNotFoundError, LimitExceededError
 from ..config import settings
 
 
 class DBTaskRepository:
     """
-    Database repository for managing Task entities.
+    Repository for managing Task entities in PostgreSQL.
 
-    This class provides CRUD operations for tasks using PostgreSQL.
+    This class provides CRUD operations for tasks and enforces
+    business constraints like maximum task count.
     """
 
     def __init__(self, session: Session) -> None:
         """
-        Initialize repository with database session.
+        Initialize task repository with database session.
 
         Args:
             session: SQLAlchemy database session
         """
         self._session = session
 
-    def add(self, task: Task) -> Task:
+    def _get_next_id(self) -> int:
+        """
+        Get the next available task ID by finding the first gap.
+
+        Returns:
+            Next available ID (smallest unused positive integer)
+        """
+        # Get all existing IDs sorted
+        existing_ids = [
+            row[0] for row in self._session.query(DBTask.id).order_by(DBTask.id).all()
+        ]
+
+        # Find first gap
+        next_id = 1
+        for existing_id in existing_ids:
+            if existing_id == next_id:
+                next_id += 1
+            elif existing_id > next_id:
+                break
+
+        return next_id
+
+    def add(
+        self,
+        title: str,
+        project_id: int,
+        description: str = "",
+        status: str = TaskStatus.TODO.value,
+        deadline: Optional[datetime] = None,
+    ) -> DBTask:
         """
         Add a new task to the database.
 
         Args:
-            task: Task entity to add
+            title: Task title
+            project_id: ID of parent project
+            description: Task description (optional)
+            status: Task status (default: TODO)
+            deadline: Task deadline (optional)
 
         Returns:
-            The added task with database ID
+            The created task
 
         Raises:
             LimitExceededError: If maximum task limit is reached
         """
-        # Check limit
+        # Check task limit
         if self.count() >= settings.max_number_of_task:
             raise LimitExceededError("Task", settings.max_number_of_task)
 
-        # Convert to DB model
-        db_task = DBTask(
-            title=task.title,
-            description=task.description,
-            status=task.status,
-            project_id=task.project_id,
-            deadline=task.deadline,
+        # Get next available ID
+        next_id = self._get_next_id()
+
+        # Create new task with manual ID
+        task = DBTask(
+            id=next_id,
+            title=title,
+            project_id=project_id,
+            description=description,
+            status=TaskStatus(status),
+            deadline=deadline
         )
 
-        self._session.add(db_task)
-        self._session.flush()
-
-        # Update domain model with DB ID
-        task.id = db_task.id
+        self._session.add(task)
+        self._session.flush()  # Flush to get the ID assigned
         return task
 
-    def get_by_id(self, task_id: int) -> Task:
+    def get_by_id(self, task_id: int) -> DBTask:
         """
         Retrieve a task by its ID.
 
@@ -79,15 +111,23 @@ class DBTaskRepository:
         Raises:
             ResourceNotFoundError: If task is not found
         """
-        db_task = self._session.get(DBTask, task_id)
-        if db_task is None:
+        task = self._session.query(DBTask).filter(DBTask.id == task_id).first()
+        if task is None:
             raise ResourceNotFoundError("Task", str(task_id))
+        return task
 
-        return self._to_domain(db_task)
-
-    def get_by_project_id(self, project_id: int) -> list[Task]:
+    def get_all(self) -> list[DBTask]:
         """
-        Retrieve all tasks for a specific project.
+        Retrieve all tasks.
+
+        Returns:
+            List of all tasks
+        """
+        return self._session.query(DBTask).order_by(DBTask.id).all()
+
+    def get_by_project_id(self, project_id: int) -> list[DBTask]:
+        """
+        Retrieve all tasks belonging to a specific project.
 
         Args:
             project_id: Project identifier
@@ -95,24 +135,14 @@ class DBTaskRepository:
         Returns:
             List of tasks in the project
         """
-        db_tasks = (
+        return (
             self._session.query(DBTask)
             .filter(DBTask.project_id == project_id)
+            .order_by(DBTask.id)
             .all()
         )
-        return [self._to_domain(t) for t in db_tasks]
 
-    def get_all(self) -> list[Task]:
-        """
-        Retrieve all tasks.
-
-        Returns:
-            List of all tasks
-        """
-        db_tasks = self._session.query(DBTask).all()
-        return [self._to_domain(t) for t in db_tasks]
-
-    def update(self, task: Task) -> Task:
+    def update(self, task: DBTask) -> DBTask:
         """
         Update an existing task.
 
@@ -125,16 +155,11 @@ class DBTaskRepository:
         Raises:
             ResourceNotFoundError: If task is not found
         """
-        db_task = self._session.get(DBTask, task.id)
-        if db_task is None:
+        existing = self._session.query(DBTask).filter(DBTask.id == task.id).first()
+        if existing is None:
             raise ResourceNotFoundError("Task", str(task.id))
 
-        # Update fields
-        db_task.title = task.title
-        db_task.description = task.description
-        db_task.status = task.status
-        db_task.deadline = task.deadline
-
+        self._session.merge(task)
         self._session.flush()
         return task
 
@@ -148,16 +173,13 @@ class DBTaskRepository:
         Raises:
             ResourceNotFoundError: If task is not found
         """
-        db_task = self._session.get(DBTask, task_id)
-        if db_task is None:
-            raise ResourceNotFoundError("Task", str(task_id))
-
-        self._session.delete(db_task)
+        task = self.get_by_id(task_id)
+        self._session.delete(task)
         self._session.flush()
 
     def delete_by_project_id(self, project_id: int) -> int:
         """
-        Delete all tasks in a project.
+        Delete all tasks belonging to a project (cascade delete).
 
         Args:
             project_id: Project identifier
@@ -165,13 +187,14 @@ class DBTaskRepository:
         Returns:
             Number of tasks deleted
         """
-        deleted_count = (
+        count = (
             self._session.query(DBTask)
             .filter(DBTask.project_id == project_id)
-            .delete()
+            .count()
         )
+        self._session.query(DBTask).filter(DBTask.project_id == project_id).delete()
         self._session.flush()
-        return deleted_count
+        return count
 
     def count(self) -> int:
         """
@@ -208,31 +231,9 @@ class DBTaskRepository:
         Returns:
             True if task exists, False otherwise
         """
-        return (
-            self._session.query(DBTask.id)
-            .filter(DBTask.id == task_id)
-            .first()
-            is not None
-        )
+        return self._session.query(DBTask).filter(DBTask.id == task_id).count() > 0
 
-    def _to_domain(self, db_task: DBTask) -> Task:
-        """
-        Convert database model to domain model.
-
-        Args:
-            db_task: Database task entity
-
-        Returns:
-            Domain task entity
-        """
-        task = Task(
-            title=db_task.title,
-            description=db_task.description,
-            status=db_task.status,
-            project_id=db_task.project_id,
-            deadline=db_task.deadline,
-        )
-        task.id = db_task.id
-        task.created_at = db_task.created_at
-        task.updated_at = db_task.updated_at
-        return task
+    def clear(self) -> None:
+        """Remove all tasks from database (for testing purposes)."""
+        self._session.query(DBTask).delete()
+        self._session.flush()

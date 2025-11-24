@@ -1,35 +1,20 @@
-# src/todolist/models/__init__.py
-"""
-Models package.
+"""Models package."""
 
-Contains both in-memory (Phase 1) and database (Phase 2) models.
-"""
-
-from sqlalchemy.orm import DeclarativeBase
-
-
-class Base(DeclarativeBase):
-    """SQLAlchemy declarative base for all database models."""
-    pass
-
-
-# Phase 1 - In-memory models
 from .task import Task, TaskStatus
 from .project import Project
-
-# Phase 2 - Database models
+from .db_base import Base, engine, SessionLocal, init_db, get_session
 from .db_project import DBProject
-from .db_task import DBTask, TaskStatus as DBTaskStatus
+from .db_task import DBTask
 
 __all__ = [
-    # Base
-    'Base',
-    # Phase 1
     'Task',
     'TaskStatus',
     'Project',
-    # Phase 2
+    'Base',
+    'engine',
+    'SessionLocal',
+    'init_db',
+    'get_session',
     'DBProject',
     'DBTask',
-    'DBTaskStatus',
 ]

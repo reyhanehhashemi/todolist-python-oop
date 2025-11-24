@@ -9,6 +9,7 @@ from typing import Optional
 from datetime import datetime
 from sqlalchemy.orm import Session
 from ..models.task import Task, TaskStatus
+from ..models.db_task import DBTask
 from ..repositories.db_task_repository import DBTaskRepository
 from ..repositories.db_project_repository import DBProjectRepository
 from ..utils.exceptions import (
@@ -43,7 +44,7 @@ class DBTaskService:
             description: str = "",
             status: str = TaskStatus.TODO.value,
             deadline: Optional[datetime] = None,
-    ) -> Task:
+    ) -> DBTask:
         """
         Create a new task.
 
@@ -66,19 +67,18 @@ class DBTaskService:
         if not self._project_repo.exists(project_id):
             raise ResourceNotFoundError("Project", str(project_id))
 
-        # Create task entity (validation happens in __post_init__)
-        task = Task(
+        # ✅ Repository خودش object میسازه
+        created_task = self._task_repo.add(
             title=title,
             project_id=project_id,
             description=description,
             status=status,
-            deadline=deadline,
+            deadline=deadline
         )
+        self._session.commit()
+        return created_task
 
-        # Persist to database
-        return self._task_repo.add(task)
-
-    def get_task(self, task_id: int) -> Task:
+    def get_task(self, task_id: int) -> DBTask:
         """
         Retrieve a task by ID.
 
@@ -93,7 +93,7 @@ class DBTaskService:
         """
         return self._task_repo.get_by_id(task_id)
 
-    def get_all_tasks(self) -> list[Task]:
+    def get_all_tasks(self) -> list[DBTask]:
         """
         Retrieve all tasks.
 
@@ -102,7 +102,7 @@ class DBTaskService:
         """
         return self._task_repo.get_all()
 
-    def get_tasks_by_project(self, project_id: int) -> list[Task]:
+    def get_tasks_by_project(self, project_id: int) -> list[DBTask]:
         """
         Retrieve all tasks for a specific project.
 
@@ -120,7 +120,7 @@ class DBTaskService:
             title: Optional[str] = None,
             description: Optional[str] = None,
             deadline: Optional[datetime] = None,
-    ) -> Task:
+    ) -> DBTask:
         """
         Update task details.
 
@@ -140,13 +140,20 @@ class DBTaskService:
         # Get existing task
         task = self._task_repo.get_by_id(task_id)
 
-        # Update task (validation happens in update_details)
-        task.update_details(title=title, description=description, deadline=deadline)
+        # Update fields
+        if title is not None:
+            task.title = title
+        if description is not None:
+            task.description = description
+        if deadline is not None:
+            task.deadline = deadline
 
         # Persist changes
-        return self._task_repo.update(task)
+        updated_task = self._task_repo.update(task)
+        self._session.commit()
+        return updated_task
 
-    def update_task_status(self, task_id: int, new_status: str) -> Task:
+    def update_task_status(self, task_id: int, new_status: str) -> DBTask:
         """
         Update task status.
 
@@ -161,14 +168,20 @@ class DBTaskService:
             ResourceNotFoundError: If task not found
             ValidationError: If status is invalid
         """
+        # Validate status
+        from ..utils.validators import validate_status
+        validate_status(new_status, TaskStatus.values())
+
         # Get existing task
         task = self._task_repo.get_by_id(task_id)
 
-        # Update status (validation happens in update_status)
-        task.update_status(new_status)
+        # Update status
+        task.status = TaskStatus(new_status)
 
         # Persist changes
-        return self._task_repo.update(task)
+        updated_task = self._task_repo.update(task)
+        self._session.commit()
+        return updated_task
 
     def delete_task(self, task_id: int) -> None:
         """
@@ -181,6 +194,7 @@ class DBTaskService:
             ResourceNotFoundError: If task not found
         """
         self._task_repo.delete(task_id)
+        self._session.commit()
 
     def delete_tasks_by_project(self, project_id: int) -> int:
         """
@@ -192,7 +206,9 @@ class DBTaskService:
         Returns:
             Number of tasks deleted
         """
-        return self._task_repo.delete_by_project_id(project_id)
+        count = self._task_repo.delete_by_project_id(project_id)
+        self._session.commit()
+        return count
 
     def count_tasks(self) -> int:
         """
@@ -215,7 +231,7 @@ class DBTaskService:
         """
         return self._task_repo.count_by_project_id(project_id)
 
-    def get_tasks_by_status(self, status: str) -> list[Task]:
+    def get_tasks_by_status(self, status: str) -> list[DBTask]:
         """
         Get all tasks with a specific status.
 
@@ -235,7 +251,7 @@ class DBTaskService:
 
         # Get all tasks and filter by status
         all_tasks = self._task_repo.get_all()
-        return [task for task in all_tasks if task.status == status]
+        return [task for task in all_tasks if task.status.value == status]
 
     def commit(self) -> None:
         """Commit the current database transaction."""

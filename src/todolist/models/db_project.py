@@ -22,7 +22,7 @@ class DBProject(Base):
     SQLAlchemy model for Project entity.
 
     Attributes:
-        id: Primary key (auto-increment)
+        id: Primary key (manual assignment for ID reuse)
         title: Project title (max 30 words, unique, indexed)
         description: Project description (max 150 words)
         created_at: Timestamp of creation (server default)
@@ -32,8 +32,8 @@ class DBProject(Base):
 
     __tablename__ = "projects"
 
-    # Primary Key
-    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    # Primary Key - ✅ autoincrement=False برای بازیافت ID
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=False)
 
     # Fields
     title: Mapped[str] = mapped_column(
@@ -71,11 +71,12 @@ class DBProject(Base):
         lazy="select"
     )
 
-    def __init__(self, title: str, description: str = "") -> None:
+    def __init__(self, id: int, title: str, description: str = "") -> None:
         """
         Initialize project with validation.
 
         Args:
+            id: Manually assigned project ID
             title: Project title (max 30 words)
             description: Project description (max 150 words, optional)
 
@@ -83,6 +84,7 @@ class DBProject(Base):
             ValidationError: If validation fails
         """
         super().__init__()
+        self.id = id
         self.title = title
         self.description = description
 

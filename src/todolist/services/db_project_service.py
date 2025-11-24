@@ -2,27 +2,26 @@
 Database-backed project service for business logic.
 
 This module provides high-level operations for project management
-using database repositories.
+using PostgreSQL database.
 """
 
 from typing import Optional
 from sqlalchemy.orm import Session
-from ..models.project import Project
+from ..models.db_project import DBProject
 from ..repositories.db_project_repository import DBProjectRepository
 from ..repositories.db_task_repository import DBTaskRepository
 from ..utils.exceptions import (
     ResourceNotFoundError,
-    ValidationError,
     DuplicateResourceError,
 )
 
 
 class DBProjectService:
     """
-    Service layer for project management with database persistence.
+    Service layer for project management operations (Database-backed).
 
     This class provides business logic for creating, updating,
-    and managing projects using PostgreSQL storage.
+    and managing projects with PostgreSQL persistence.
     """
 
     def __init__(self, session: Session) -> None:
@@ -32,41 +31,34 @@ class DBProjectService:
         Args:
             session: SQLAlchemy database session
         """
+        self._session = session
         self._project_repo = DBProjectRepository(session)
         self._task_repo = DBTaskRepository(session)
-        self._session = session
 
-    def create_project(
-            self,
-            title: str,
-            description: str = "",
-    ) -> Project:
+    def create_project(self, title: str, description: str = "") -> DBProject:
         """
         Create a new project.
 
         Args:
-            title: Project title (max 30 words)
-            description: Project description (max 150 words, optional)
+            title: Project title
+            description: Project description (optional)
 
         Returns:
             Created project
 
         Raises:
-            ValidationError: If validation fails
             DuplicateResourceError: If project with same title exists
-            LimitExceededError: If project limit is reached
         """
         # Check for duplicate title
         if self._project_repo.exists_by_title(title):
             raise DuplicateResourceError("Project", title)
 
-        # Create project entity (validation happens in __post_init__)
-        project = Project(title=title, description=description)
+        # ✅ Repository خودش object میسازه
+        created_project = self._project_repo.add(title=title, description=description)
+        self._session.commit()
+        return created_project
 
-        # Persist to database
-        return self._project_repo.add(project)
-
-    def get_project(self, project_id: int) -> Project:
+    def get_project(self, project_id: int) -> DBProject:
         """
         Retrieve a project by ID.
 
@@ -81,7 +73,7 @@ class DBProjectService:
         """
         return self._project_repo.get_by_id(project_id)
 
-    def get_project_by_title(self, title: str) -> Optional[Project]:
+    def get_project_by_title(self, title: str) -> Optional[DBProject]:
         """
         Retrieve a project by title.
 
@@ -93,7 +85,7 @@ class DBProjectService:
         """
         return self._project_repo.get_by_title(title)
 
-    def get_all_projects(self) -> list[Project]:
+    def get_all_projects(self) -> list[DBProject]:
         """
         Retrieve all projects.
 
@@ -107,57 +99,70 @@ class DBProjectService:
             project_id: int,
             title: Optional[str] = None,
             description: Optional[str] = None,
-    ) -> Project:
+    ) -> DBProject:
         """
         Update project details.
 
         Args:
             project_id: Project identifier
-            title: New title (optional, max 30 words)
-            description: New description (optional, max 150 words)
+            title: New title (optional)
+            description: New description (optional)
 
         Returns:
             Updated project
 
         Raises:
             ResourceNotFoundError: If project not found
-            ValidationError: If validation fails
             DuplicateResourceError: If new title conflicts with existing project
         """
-        # Get existing project
         project = self._project_repo.get_by_id(project_id)
 
-        # Check for title conflict if title is being changed
+        # Check for duplicate title if updating title
         if title is not None and title != project.title:
-            if self._project_repo.exists_by_title(title):
+            existing = self._project_repo.get_by_title(title)
+            if existing and existing.id != project_id:
                 raise DuplicateResourceError("Project", title)
 
-        # Update project (validation happens in update_details)
-        project.update_details(title=title, description=description)
+        # Update fields
+        if title is not None:
+            project.title = title
+        if description is not None:
+            project.description = description
 
-        # Persist changes
-        return self._project_repo.update(project)
+        updated_project = self._project_repo.update(project)
+        self._session.commit()
+        return updated_project
 
-    def delete_project(self, project_id: int, cascade: bool = True) -> None:
+    def delete_project(self, project_id: int, cascade: bool = True) -> dict:
         """
         Delete a project.
 
         Args:
             project_id: Project identifier
-            cascade: If True, also delete all tasks in the project
+            cascade: If True, database CASCADE will handle task deletion
+
+        Returns:
+            Dictionary with deletion statistics
 
         Raises:
             ResourceNotFoundError: If project not found
         """
         # Verify project exists
-        self._project_repo.get_by_id(project_id)
+        project = self._project_repo.get_by_id(project_id)
 
-        # Delete associated tasks if cascade is True
-        if cascade:
-            self._task_repo.delete_by_project_id(project_id)
+        # Count tasks before deletion (for statistics)
+        tasks = self._task_repo.get_by_project_id(project_id)
+        deleted_tasks = len(tasks)
 
-        # Delete project
+        # Delete the project (CASCADE will handle tasks automatically)
         self._project_repo.delete(project_id)
+        self._session.commit()
+
+        return {
+            "project_id": project_id,
+            "deleted_tasks": deleted_tasks,
+            "cascade": cascade,
+        }
 
     def count_projects(self) -> int:
         """
@@ -168,22 +173,41 @@ class DBProjectService:
         """
         return self._project_repo.count()
 
-    def project_exists(self, project_id: int) -> bool:
+    def get_project_summary(self, project_id: int) -> dict:
         """
-        Check if a project exists.
+        Get summary information about a project.
 
         Args:
             project_id: Project identifier
 
         Returns:
-            True if project exists, False otherwise
+            Dictionary with project details and task statistics
+
+        Raises:
+            ResourceNotFoundError: If project not found
         """
-        return self._project_repo.exists(project_id)
+        project = self.get_project(project_id)
+
+        # Get all tasks for this project
+        tasks = self._task_repo.get_by_project_id(project_id)
+
+        # Count tasks by status
+        from ..models.db_task import TaskStatus
+
+        status_counts = {status.value: 0 for status in TaskStatus}
+        for task in tasks:
+            status_counts[task.status.value] += 1
+
+        return {
+            "project": project,
+            "total_tasks": len(tasks),
+            "status_breakdown": status_counts,
+        }
 
     def commit(self) -> None:
-        """Commit the current database transaction."""
+        """Commit current transaction."""
         self._session.commit()
 
     def rollback(self) -> None:
-        """Rollback the current database transaction."""
+        """Rollback current transaction."""
         self._session.rollback()

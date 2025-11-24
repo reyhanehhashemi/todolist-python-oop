@@ -36,7 +36,7 @@ class DBTask(Base):
     SQLAlchemy model for Task entity.
 
     Attributes:
-        id: Primary key (auto-increment)
+        id: Primary key (manual assignment for ID reuse)
         title: Task title (max 30 words, indexed)
         description: Task description (max 150 words)
         status: Current status (TODO, DOING, DONE)
@@ -49,8 +49,8 @@ class DBTask(Base):
 
     __tablename__ = "tasks"
 
-    # Primary Key
-    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    # Primary Key - ✅ autoincrement=False برای بازیافت ID
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=False)
 
     # Fields
     title: Mapped[str] = mapped_column(
@@ -108,6 +108,7 @@ class DBTask(Base):
 
     def __init__(
             self,
+            id: int,
             title: str,
             project_id: int,
             description: str = "",
@@ -118,6 +119,7 @@ class DBTask(Base):
         Initialize task with validation.
 
         Args:
+            id: Manually assigned task ID
             title: Task title (max 30 words)
             project_id: ID of the parent project
             description: Task description (max 150 words, optional)
@@ -128,6 +130,7 @@ class DBTask(Base):
             ValidationError: If validation fails
         """
         super().__init__()
+        self.id = id
         self.title = title
         self.project_id = project_id
         self.description = description
