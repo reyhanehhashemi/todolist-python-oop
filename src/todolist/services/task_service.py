@@ -209,3 +209,40 @@ class TaskService:
         validate_status(status, TaskStatus.values())
 
         return [task for task in self._task_repo.get_all() if task.status == status]
+
+
+    def auto_close_overdue_tasks(self) -> int:
+        """
+        Automatically close overdue tasks.
+
+        Tasks are closed if:
+        - deadline < now
+        - status != DONE
+
+        Returns:
+            Number of tasks closed
+        """
+        from datetime import datetime
+
+        all_tasks = self._task_repo.get_all()
+        closed_count = 0
+
+        now = datetime.now()
+
+        for task in all_tasks:
+            # Skip if no deadline
+            if task.deadline is None:
+                continue
+
+            # Skip if already DONE
+            if task.status == TaskStatus.DONE.value:
+                continue
+
+            # Check if overdue
+            if task.deadline < now:
+                task.update_status(TaskStatus.DONE.value)
+                self._task_repo.update(task)
+                closed_count += 1
+
+        return closed_count
+

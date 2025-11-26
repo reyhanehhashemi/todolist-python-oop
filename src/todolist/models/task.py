@@ -167,10 +167,10 @@ class Task:
             raise ValidationError("Task deadline must be a datetime object")
 
         # Remove microseconds for fair comparison
-        now = datetime.now().replace(microsecond=0)
-        deadline_normalized = self.deadline.replace(microsecond=0)
+        #now = datetime.now().replace(microsecond=0)
+        #deadline_normalized = self.deadline.replace(microsecond=0)
 
-        if deadline_normalized < now:
+        #if deadline_normalized < now:
             raise ValidationError("Task deadline cannot be in the past")
 
     def update_status(self, new_status: str) -> None:
