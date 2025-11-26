@@ -266,37 +266,63 @@ class DBTaskService:
         Automatically close overdue tasks.
 
         Tasks are closed if:
-        - deadline < now
+        - deadline < now (in local timezone)
         - status != DONE
 
         Returns:
             Number of tasks closed
         """
-        all_tasks = self._task_repo.get_all()
-        closed_count = 0
+        from datetime import datetime
 
+        # ✅ استفاده از تایم محلی (نه UTC)
         now = datetime.now()
 
+        all_tasks = self._task_repo.get_all()
+
+        print(f"\n=== Auto-Close Debug Info ===")
+        print(f"Current time (Local): {now}")
+        print(f"Total tasks in DB: {len(all_tasks)}")
+
+        closed_count = 0
+
         for task in all_tasks:
-            # Skip if no deadline
+            # Skip tasks without deadline
             if task.deadline is None:
                 continue
 
-            # Skip if already DONE
-            if task.status == TaskStatus.DONE.value:
+            # Get status as string (مقاوم در برابر Enum/String)
+            if isinstance(task.status, str):
+                status_value = task.status
+            elif hasattr(task.status, 'value'):
+                status_value = task.status.value
+            else:
+                status_value = str(task.status)
+
+            # Skip already DONE tasks
+            if status_value == TaskStatus.DONE.value:
                 continue
 
-            # Check if overdue
-            if task.deadline < now:
-                # Update status
-                task.status = TaskStatus.DONE
+            # ✅ تبدیل deadline به naive اگر aware است
+            deadline = task.deadline
+            if deadline.tzinfo is not None:
+                # تبدیل به تایم محلی
+                deadline = deadline.replace(tzinfo=None)
 
-                # Persist changes
+            print(f"Task {task.id}: deadline={deadline}, now={now}, overdue={deadline < now}")
+
+            # Check if overdue
+            if deadline < now:
+                # Update to DONE
+                task.status = TaskStatus.DONE  # ✅ نه .value
+                task.closed_at = now  # ✅ نه now()
+
+                # Save changes
                 self._task_repo.update(task)
                 closed_count += 1
+                print(f"  -> Closed task {task.id}")
 
-        # Commit all changes at once
-        if closed_count > 0:
-            self._session.commit()
+        # Commit all changes
+        self._session.commit()
 
+        print(f"Total closed: {closed_count}")
         return closed_count
