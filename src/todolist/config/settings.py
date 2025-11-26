@@ -18,6 +18,14 @@ class Settings:
         # Load .env file from project root
         load_dotenv()
 
+        # Database configuration
+        self.DATABASE_URL: str = self._get_str_env(
+            "DATABASE_URL",
+            default="postgresql://todolist_user:todolist_pass@localhost:5432/todolist_db"
+        )
+
+        self.DB_ECHO: bool = self._get_bool_env("DB_ECHO", default=False)
+
         # Load configuration with default values
         self.max_number_of_project: int = self._get_int_env(
             "MAX_NUMBER_OF_PROJECT", default=10
@@ -28,6 +36,20 @@ class Settings:
 
         # Validate configuration
         self._validate()
+
+    def _get_str_env(self, key: str, default: str) -> str:
+        """
+        Get string value from environment variable.
+
+        Args:
+            key: Environment variable name
+            default: Default value if not found
+
+        Returns:
+            String value from environment or default
+        """
+        value: Optional[str] = os.getenv(key)
+        return value if value is not None else default
 
     def _get_int_env(self, key: str, default: int) -> int:
         """
@@ -53,6 +75,23 @@ class Settings:
             )
             return default
 
+    def _get_bool_env(self, key: str, default: bool) -> bool:
+        """
+        Get boolean value from environment variable.
+
+        Args:
+            key: Environment variable name
+            default: Default value if not found
+
+        Returns:
+            Boolean value from environment or default
+        """
+        value: Optional[str] = os.getenv(key)
+        if value is None:
+            return default
+
+        return value.lower() in ("true", "1", "yes", "on")
+
     def _validate(self) -> None:
         """
         Validate configuration values.
@@ -72,10 +111,15 @@ class Settings:
                 f"got {self.max_number_of_task}"
             )
 
+        if not self.DATABASE_URL:
+            raise ValueError("DATABASE_URL cannot be empty")
+
     def __repr__(self) -> str:
         """Return string representation of settings."""
         return (
             f"Settings("
+            f"DATABASE_URL={self.DATABASE_URL}, "
+            f"DB_ECHO={self.DB_ECHO}, "
             f"max_number_of_project={self.max_number_of_project}, "
             f"max_number_of_task={self.max_number_of_task})"
         )

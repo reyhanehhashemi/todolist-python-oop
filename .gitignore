@@ -26,21 +26,35 @@ ENV/
 env/
 .venv
 
-# Poetry
+# Environment Variables
+.env
+.env.local
 
-# IDE
-.idea/
+# IDEs
 .vscode/
+.idea/
 *.swp
 *.swo
 *~
 
-# Environment variables
-.env
+# Database
+*.db
+*.sqlite3
+
+# Logs
+*.log
+logs/
+
+# Testing
+.coverage
+htmlcov/
+.pytest_cache/
+
+# Alembic
+# Don't ignore alembic folder itself, but ignore any local overrides
+alembic.ini.local
 
 # OS
 .DS_Store
 Thumbs.db
-.coverage
-htmlcov/
-.pytest_cache/
+debug_tasks.py

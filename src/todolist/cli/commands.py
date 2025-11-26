@@ -92,6 +92,7 @@ class CLI:
                     self._delete_task()
                 elif choice == "12":
                     self._show_statistics()
+
                 else:
                     print("\n❌ Invalid choice. Please try again.")
 
@@ -434,3 +435,5 @@ class CLI:
         for status in TaskStatus.values():
             count = len(self._task_service.get_tasks_by_status(status))
             print(f"   {status}: {count}")
+
+
