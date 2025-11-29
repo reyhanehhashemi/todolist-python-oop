@@ -4,7 +4,7 @@
 export PATH="/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$HOME/.local/bin"
 
 # Project directory
-PROJECT_DIR="$HOME/Documents/todolist-python-oop-phase2"
+PROJECT_DIR="$HOME/Documents/university/Term 7/test project"
 cd "$PROJECT_DIR" || exit 1
 
 # Activate virtual environment directly

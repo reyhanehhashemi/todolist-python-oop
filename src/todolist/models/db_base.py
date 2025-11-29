@@ -1,33 +1,20 @@
 """
-Database base configuration and session management.
+Database base configuration.
 
-This module provides the SQLAlchemy base class, engine,
-and session factory for database operations.
+This module provides the SQLAlchemy base class for all models.
+Engine and Session are managed by db.database module.
 """
 
-from sqlalchemy import create_engine
-from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
-from ..config import settings
+from sqlalchemy.orm import DeclarativeBase
 
 
 class Base(DeclarativeBase):
-    """Base class for all database models."""
+    """
+    Base class for all database models.
+
+    All SQLAlchemy models should inherit from this class.
+    """
     pass
-
-
-# Create database engine
-engine = create_engine(
-    settings.DATABASE_URL,
-    echo=settings.DB_ECHO,
-    pool_pre_ping=True,  # Verify connections before using
-)
-
-# Session factory
-SessionLocal = sessionmaker(
-    autocommit=False,
-    autoflush=False,
-    bind=engine,
-)
 
 
 def init_db() -> None:
@@ -36,25 +23,19 @@ def init_db() -> None:
 
     This function creates all tables defined in models
     that inherit from Base.
+
+    Note:
+        In production, use Alembic migrations instead.
+        This is mainly for development and testing.
     """
     # Import models to register them with Base
     from . import db_project, db_task  # noqa: F401
 
+    # Import engine from central location
+    from ..db.database import engine
+
     # Create all tables
     Base.metadata.create_all(bind=engine)
-
-
-def get_session() -> Session:
-    """
-    Create and return a new database session.
-
-    Returns:
-        SQLAlchemy Session instance
-
-    Note:
-        Caller is responsible for closing the session.
-    """
-    return SessionLocal()
 
 
 def drop_db() -> None:
@@ -64,4 +45,8 @@ def drop_db() -> None:
     Warning:
         This will delete all data! Use only for testing.
     """
+    # Import engine from central location
+    from ..db.database import engine
+
+    # Drop all tables
     Base.metadata.drop_all(bind=engine)

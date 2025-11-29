@@ -1,10 +1,9 @@
 """
 Auto-close overdue tasks command.
-Designed to be run as a standalone script or cron job.
 """
 
 import sys
-from datetime import datetime
+import logging
 from pathlib import Path
 
 # Add src directory to Python path
@@ -12,52 +11,54 @@ src_dir = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(src_dir))
 
 
+def setup_logging():
+    """Configure logging to both console and file."""
+    log_dir = Path("logs")
+    log_dir.mkdir(exist_ok=True)
+
+    log_file = log_dir / "auto_close.log"
+    logger = logging.getLogger(__name__)
+    logger.setLevel(logging.INFO)
+    logger.handlers.clear()
+
+    file_handler = logging.FileHandler(log_file, mode='a', encoding='utf-8')
+    file_handler.setLevel(logging.INFO)
+
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setLevel(logging.INFO)
+
+    formatter = logging.Formatter(
+        '| [%(asctime)s] %(message)s |',
+        datefmt='%Y-%m-%d %H:%M:%S'
+    )
+
+    file_handler.setFormatter(formatter)
+    console_handler.setFormatter(formatter)
+
+    logger.addHandler(file_handler)
+    logger.addHandler(console_handler)
+
+    return logger
+
+
 def auto_close_overdue_tasks():
-    """
-    Close all tasks that have passed their deadline.
+    """Close all tasks that have passed their deadline."""
+    logger = setup_logging()
 
-    This function connects to the database and closes all tasks
-    where deadline < now and status != CLOSED.
-
-    Returns:
-        int: Number of tasks closed
-    """
     try:
-        # Import inside function to avoid circular import issues
-        from ..config.settings import settings
+        # ✅ استفاده از get_db_context از session.py
+        from ..db.session import get_db_context
         from ..services.db_task_service import DBTaskService
-        from sqlalchemy import create_engine
-        from sqlalchemy.orm import sessionmaker
 
-        # Create database engine
-        engine = create_engine(
-            settings.DATABASE_URL,
-            echo=False  # Disable SQL logging for cron jobs
-        )
-
-        # Create session
-        SessionLocal = sessionmaker(bind=engine)
-        session = SessionLocal()
-
-        try:
-            # Create service and run auto-close
+        with get_db_context() as session:
             task_service = DBTaskService(session)
             closed_count = task_service.auto_close_overdue_tasks()
-
-            # Log result with timestamp
-            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            print(f"[{timestamp}] Auto-close completed: {closed_count} task(s) closed")
-
+            logger.info(f"Auto-close completed: {closed_count} task(s) closed")
             return closed_count
 
-        finally:
-            session.close()
-            engine.dispose()
-
     except Exception as e:
-        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        error_msg = f"[{timestamp}] ERROR: {str(e)}"
-        print(error_msg, file=sys.stderr)
+        error_msg = f"ERROR: {str(e)}"
+        logger.error(error_msg)
         raise
 
 
@@ -65,9 +66,9 @@ def main():
     """Entry point for command-line execution."""
     try:
         closed_count = auto_close_overdue_tasks()
-        sys.exit(0)  # Success
+        sys.exit(0)
     except Exception:
-        sys.exit(1)  # Failure
+        sys.exit(1)
 
 
 if __name__ == "__main__":

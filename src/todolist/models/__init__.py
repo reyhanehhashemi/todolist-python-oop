@@ -2,7 +2,7 @@
 
 from .task import Task, TaskStatus
 from .project import Project
-from .db_base import Base, engine, SessionLocal, init_db, get_session
+from .db_base import Base, init_db, drop_db
 from .db_project import DBProject
 from .db_task import DBTask
 
@@ -11,10 +11,8 @@ __all__ = [
     'TaskStatus',
     'Project',
     'Base',
-    'engine',
-    'SessionLocal',
     'init_db',
-    'get_session',
+    'drop_db',
     'DBProject',
     'DBTask',
 ]

@@ -5,7 +5,6 @@ Supports both in-memory (Phase 1) and database (Phase 2) modes.
 """
 
 import sys
-from sqlalchemy.orm import Session
 
 from .cli.commands import CLI
 from .config import settings
@@ -49,7 +48,9 @@ def run_inmemory_mode() -> None:
 
 def run_database_mode() -> None:
     """Run application with database storage (Phase 2)."""
-    from .models import init_db, get_session
+    # ✅ تغییر Import - حذف get_session و اضافه get_db_context
+    from .models import init_db
+    from .db.session import get_db_context
     from .services.db_project_service import DBProjectService
     from .services.db_task_service import DBTaskService
 
@@ -71,29 +72,27 @@ def run_database_mode() -> None:
         print(f"❌ Failed to initialize database: {e}")
         return
 
-    # Create database session
-    session: Session = get_session()
-
+    # ✅ استفاده از get_db_context به جای get_session
     try:
-        # Initialize services
-        project_service = DBProjectService(session)
-        task_service = DBTaskService(session)
+        with get_db_context() as session:
+            # Initialize services
+            project_service = DBProjectService(session)
+            task_service = DBTaskService(session)
 
-        # Initialize and run CLI
-        cli = CLI(project_service, task_service)
-        cli.run()
+            # Initialize and run CLI
+            cli = CLI(project_service, task_service)
+            cli.run()
 
     except KeyboardInterrupt:
         print("\n\n👋 Application terminated by user.")
-        session.rollback()
+        # Rollback اتوماتیک توسط context manager انجام میشه
     except Exception as e:
         print(f"\n❌ Fatal error: {e}")
-        session.rollback()
+        # Rollback اتوماتیک توسط context manager انجام میشه
         import traceback
         traceback.print_exc()
-    finally:
-        session.close()
-        print("\n🔒 Database session closed.")
+    # Close اتوماتیک توسط context manager انجام میشه
+    print("\n🔒 Database session closed.")
 
 
 def show_usage() -> None:
